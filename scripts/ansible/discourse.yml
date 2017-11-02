@@ -1,0 +1,7 @@
+---
+
+- name: Setup discourse
+  hosts: all
+  roles:
+    - discourse
+...

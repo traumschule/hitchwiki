@@ -1,17 +1,24 @@
 ---
-# Run as root
-# used variables: domain, user
-- name: Add '{{ domain }}' to `/etc/hosts`
-  become: yes
-  lineinfile:
-    path: /etc/hosts
-    regexp: '^127.0.0.1'
-    line: 127.0.0.1 localhost {{ domain }}
+# Prepare user
+- debug: var=ansible_user
+
+- name: Load settings
+  include_vars: "{{ item }}"
+  with_first_found:
+    - configs/settings.yml
+    - configs/settings-example.yml
 
 - name: Add user {{ user }}
   become: yes
   user: generate_ssh_key=yes name={{ user }} uid=1050 shell=/bin/bash
   # https://docs.ansible.com/ansible/latest/user_module.html
+
+- name: Add authorized_keys for {{ user }}
+  become: yes
+  authorized_key: user={{ user }} state=present key="{{ lookup('file', item) }}"
+  with_first_found:
+    - configs/authorized_keys
+    - ~/.ssh/id_rsa.pub
 
 - name: Add {{ user }} to sudoers
   become: yes
@@ -19,16 +26,8 @@
     path: /etc/sudoers
     regexp: '^{{user}}'
     line: "{{user}} ALL=NOPASSWD:ALL"
- 
-- name: Allow keys in `configs/authorized_keys` to connect as {{ user }}
-  become: yes
-  authorized_key: user={{ user }} state=present key="{{ lookup('file', 'configs/authorized_keys') }}"
 
-- name: Allow {{ user }} to connect without password
-  become: yes
-  remote_user: "{{ user }}"
-  shell: cat /home/{{ user }}/.ssh/id_rsa.pub >> /home/{{ user }}/.ssh/authorized_keys
-
+# Install dependencies
 - name: Use apt-cacher
   become: yes
   lineinfile:
@@ -41,50 +40,20 @@
       # See https://blog.packagecloud.io/eng/2015/05/05/using-apt-cacher-ng-with-ssl-tls/
   when: apt_proxy is defined
 
-- name: Install pip
+- name: Install git and pip
   become: yes
   apt: name={{ item }} state=present
   with_items: { git, python-pip }
 
 - name: Update pip and install ansible
-  pip: name={{ item }} state=latest
+  become: yes
+  pip: name={{ item }} state=latest umask=0022
   with_items: { pip, ansible }
 
-- shell: "[ -d /home/{{ user }}/src ]"
-  register: src_exists
-  ignore_errors: yes
-
-- name: Clone hitchwiki repository
-  become: yes
-  git:
-    dest: "/home/{{ user }}/src"
-    repo: https://github.com/traumschule/hitchwiki # TODO change later
-    version: ansible
-  when: src_exists|failed
-
-- name: Grant /home/{{ user }}/src to {{ user }}
-  become: yes
-  file: path=/home/{{ user }}/src owner={{ user }} group={{ user }} recurse=yes
-
-- name: Copy settings.yml # from local to remote
-  become: yes
-  copy: src=configs/settings.yml dest=/home/{{ user }}/src/configs/settings.yml owner={{user}} group={{user}}
-
-- name: Set remote `hosts`
-  become: yes
+# Prepare repository (non vagrant)
+- name: Prepare repository
+  when: ansible_user != "ubuntu"
   remote_user: "{{ user }}"
-  shell: echo -e "[hitchwiki]\nlocalhost" > /home/{{ user }}/src/scripts/ansible/hosts
-
-- name: Link /home/{{ user }}/src to /var/www
-  become: yes
-  file: state=link force=yes src="/home/{{ user }}/src" path=/var/www
-  ignore_errors: yes
-
-- name: Change hostname to '{{ domain }}'
-  become: yes
-  hostname: name={{ domain }}
-
-- name: Preparation finished, now ssh in and run '~/src/scripts/setup_hitchwiki.sh'.
-  set_fact: state_prepare=True
+  include_tasks: non-vagrant.yml
 
 ...

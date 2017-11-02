@@ -1,0 +1,163 @@
+---
+# TODO Discourse https://github.com/discourse/discourse/blob/master/docs/INSTALL.md
+# docker: http://www.techsupportpk.com/2016/12/how-to-set-up-discourse-on-ubuntu-1604.html
+# nginx: https://www.rosehosting.com/blog/how-to-install-and-setup-discourse-on-an-ubuntu-12-04-vps/
+
+- name: Set discourse dir
+  set_fact: discourse_dir={{ dir.root }}/discourse
+
+- name: Add ppa:chris-lea/redis-server
+  become: yes
+  apt_repository: state=present repo=ppa:chris-lea/redis-server
+
+- name: Install discoure dependencies
+  become: yes
+  apt: update_cache=yes name={{item}} state=present
+  with_items: { python-software-properties, expect, debconf-utils, build-essential, zlib1g-dev, libssl-dev, openssl, libcurl4-openssl-dev, libreadline6-dev, libpcre3, libpcre3-dev, postgresql, postgresql-contrib-9.5, libpq-dev, postgresql-server-dev-9.5, redis-server, advancecomp, gifsicle, jhead, jpegoptim, libjpeg-turbo-progs, optipng, pngcrush, pngquant, gnupg2, ruby-dev, rubygems-integration, python-psycopg2 }
+
+- name: Clone discourse
+  git:
+    repo: https://github.com/discourse/discourse.git
+    dest: "{{ discourse_dir }}"
+    depth: 1
+#    force: yes
+
+- name: Configure gem
+  lineinfile:
+    path: ~/.gemrc
+    line: "gem: --no-document"
+    state: present
+    create: yes
+
+- name: Add rvm ppa
+  become: yes
+  apt_repository:
+    state: present
+    repo: ppa:rael-gc/rvm
+
+- name: Install rvm
+  become: yes
+  apt: name=rvm state=present update_cache=yes
+
+- name: Install rvm
+  shell:
+    gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB
+    \curl -O https://raw.githubusercontent.com/rvm/rvm/master/binscripts/rvm-installer
+    \curl -O https://raw.githubusercontent.com/rvm/rvm/master/binscripts/rvm-installer.asc
+    gpg --verify rvm-installer.asc
+    chmod +x rvm-installer
+    sudo bash rvm-installer stable
+    export PATH=$PATH:/usr/share/rvm/bin
+  # https://rvm.io/rvm/security
+  # https://github.com/rvm/rvm
+
+- name: Set rvm path
+  set_fact: rvm_bin=/usr/share/rvm/bin/rvm
+
+- name: Configure rvm
+  become: yes
+  shell: |
+    bash --login # https://rvm.io/integration/gnome-terminal
+    {{ rvm_bin }} install 2.4.2
+    {{ rvm_bin }} --default 2.4.2
+    {{ rvm_bin }} get master
+    {{ rvm_bin }} cleanup all
+  # https://rvm.io/rvm/upgrading  
+  ignore_errors: yes
+  
+- name: Install bundler and mailcatcher
+  become: yes
+#  shell: gem install --no-document bundler mailcatcher
+  gem: name={{item}} state=present user_install=yes executable=~/.gem/ruby/2.3.0/bin
+  with_items: { bundler, mailcatcher }
+  # Fails with: permission denied
+
+- name: Install nvm
+  become: yes
+  npm: name=nvm state=present path=/app/location global=yes
+
+#- name: Install Node
+#  become: yes
+#  shell: |
+#    nvm install nodejs
+#    nvm alias default node
+
+- name: Install svgo
+  become: yes
+  npm: name=svgo global=yes #phantomjs-prebuilt 
+
+- name: Stop apache2 # to have free memory
+  become: yes
+  command: apache2ctl stop
+
+- name: Use system libraries for nokogiri
+  become: yes
+  command: chdir={{ discourse_dir }} bundle config build.nokogiri --use-system-libraries
+- name: Install nokogiri
+  become: yes
+  gem: name=nokogiri version=1.8.1 state=present
+- name: Install cppjieba_rb
+  become: yes
+  gem: name=cppjieba_rb version=0.3.0 state=present
+- name: Bundle install
+  become: yes
+  command: chdir={{ discourse_dir }} bundle install
+- name: Install sassc
+  become: yes
+  gem: name=sassc version=1.11.2 state=present
+
+# Database
+# Why does discourse not support MariaDB (search) https://meta.discourse.org/t/why-not-support-mysql/2568/44
+- name: Create role hitchwiki
+  #postgresql_user: name=hitchwiki role_attr_flags=SUPERUSER #login_user=postgres
+  become_user: postgres
+  shell: createuser hitchwiki --superuser
+  # https://www.postgresql.org/docs/9.1/static/database-roles.html
+  ignore_errors: yes
+
+- name: Add discourse database
+  postgresql_db: name=discourse login_user={{ user }}
+  # https://www.postgresql.org/docs/9.1/static/tutorial-createdb.html  
+
+- name: Grant database to user discourse
+  postgresql_user: name=discourse password=discourse db=discourse role_attr_flags=CREATEDB,NOSUPERUSER login_user={{ user }}
+  # state=present #login_user=hitchwiki # login_password=postgres login_password=postgres
+
+- name: Create database
+  command: chdir={{ discourse_dir }} bundle exec rake db:drop db:create db:migrate
+
+- name: Add apache config
+  template: src={{ dir.conf }}/apache-discourse.conf dest=/etc/apache2/sites-enabled/
+
+- name: Add discourse init script
+  command: chdir={{ discourse_dir }} rvm alias create discourse ruby-2.4.2@discourse --create
+  # creates wrapper to /usr/share/rvm/wrappers/discourse - see https://rvm.io/integration/init-d
+
+#- name: Create discourse daemon
+#  template: src={{ dir.script }}/init_discourse.sh dest=/etc/init.d/discourse
+
+- name: Start apache2
+  become: yes
+  command: apache2ctl start
+
+- name: Discourse is set up.
+  command: |
+    echo "Discourse is set up.
+      Following commands are available (run from {{ discourse_dir }}):
+       - Run specs: bundle exec rake autospec # CTRL + C to stop
+       - Create admin account: bundle exec rake admin:create
+       - Run sidekiq: mailcatcher # open http://localhost:1080 to see the emails, stop with `pkill -f mailcatcher`
+                      bundle exec sidekiq # open http://localhost:3000/sidekiq to see queues
+                      bundle exec rails server
+       - Launch discourse: bundle exec rails s -b 0.0.0.0 # Point your browser to http://localhost:3000
+       For details see {{ discourse_dir }}/README.md and `scripts/ansible/roles/hitchwiki/tasks/discourse.yml`
+       More info: 
+       - https://github.com/discourse/discourse/blob/master/docs/INSTALL.md
+       - vagrant setup: https://github.com/discourse/discourse/blob/master/docs/VAGRANT.md
+       - development setup: https://github.com/discourse/discourse/blob/master/docs/DEVELOPER-ADVANCED.md
+       - setup with docker: https://github.com/discourse/discourse/blob/master/docs/INSTALL.md
+    "
+  register: info
+- debug: var=info.stdout_lines
+
+...
