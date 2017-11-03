@@ -1,0 +1,10 @@
+---
+- name: Add matrix source
+  become: yes
+  apt_repository: state=present repo="deb https://matrix.org/packages/debian/ testing main"
+
+- name: Install matrix
+  become: yes
+  apt: name=synapse state=present
+
+...

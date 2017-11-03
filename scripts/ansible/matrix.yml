@@ -1,0 +1,14 @@
+---
+# This play expects root access on a remote debian system (or derivate with present apt).
+# It will create a hitchwiki user, checkout the repository and install ansible
+# https://github.com/EMnify/matrix-synapse-auto-deploy
+# https://github.com/matrix-org/synapse/blob/master/README.rst#platform-specific-instructions
+
+
+# See INSTALL.md => Installing using vagrant
+- hosts: all
+  gather_facts: no
+  roles:
+    - matrix
+
+...
