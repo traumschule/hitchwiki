@@ -17,19 +17,11 @@ more tips.
 ## Help needed!
 _[Contact us](http://hitchwiki.org/en/Template:Communityportal) if you want to join the effort!_
 
-Read more about developing Hitchwiki [from the wiki](https://github.com/Hitchwiki/hitchwiki/wiki)
+Read more about developing Hitchwiki [from the wiki](https://github.com/Hitchwiki/hitchwiki/wiki), our [scripts](scripts/README.md) and [ansible](scripts/ansible/README.md).
 
 ## Installing
 
-We have two major ways of running the software:
-
-### Installing with Vagrant (recommended)
-
-The easiest and quickest way to get started is with Vagrant. Running through Vagrant can be a little bit slower. See [INSTALL-vagrant.md](INSTALL-vagrant.md) for further details.
-
-### Installing locally
-
-Install the stack on your localhost. This approach takes a little more time to setup, and bit more manual configuration, but is super fast, and can be easier to work with. See [INSTALL.md](INSTALL.md) for details.
+We use ansible to deploy locally or via vagrant, see [INSTALL.md](INSTALL.md) for details.
 
 ## License
 Code [MIT](LICENSE.md)

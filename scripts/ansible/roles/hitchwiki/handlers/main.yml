@@ -1,0 +1,83 @@
+---
+# Hitchwiki handlers
+
+# Installation report
+- name: Refresh status
+  become: yes
+  command: "{{ dir.script }}/status.sh"
+  listen:
+    - save
+    - status
+  notify:
+    - fetch status
+    - load
+
+- name: Retrieve summary
+  fetch: src={{ dir.state }} dest=status/{{ ansible_host }}/ flat=yes
+  listen: "fetch status"
+  notify: "load"
+
+- name: Load variables
+  include_vars: "status/{{ ansible_host }}/state.yml"
+  listen:
+    - load
+    - reload
+
+# System
+- name: update system
+  become: yes
+  apt: allow_unauthenticated=yes update_cache=yes autoremove=yes autoclean=yes upgrade=dist
+  ignore_errors: yes # TODO this is not failsave https://github.com/ansible/ansible/issues/30169
+
+- name: start monit
+  become: yes
+  service: name=monit enabled=yes state=restarted
+  listen:
+    - restart monit
+
+# Database
+- name: restart db
+  become: yes
+  service: name=mysql enabled=yes state=restarted
+  listen: "start db"
+
+- name: Show databases
+  command: IFS=$'\n' echo "SHOW DATABASES;" | mysql {{ db_credentials }} | grep -E '^hitchwiki_en' | sed 's/^hitchwiki_//g'
+  register: tables
+  listen:
+    - languages
+    - databases
+  notify: db_tables
+- debug:
+    var: tables.stdout
+  listen: db_tables
+
+# Webserver
+- name: restart apache
+  become: yes
+  service: name=apache2 enabled=yes state=restarted
+  listen:
+    - restart apache
+
+# Mediawiki handlers
+- name: start parsoid
+  become: yes
+  service: name=parsoid enables=yes state=restarted
+  listen:
+    - restart parsoid
+
+# Development environment
+- name: start maildev
+  become: yes
+  service: name=maildev enabled=yes state=started
+  listen:
+    - maildev
+  ignore_errors: yes 
+
+- name: stop maildev
+  become: yes
+  shell: kill $(pidof node /usr/local/bin/maildev)
+  when: started.maildev
+  ignore_errors: yes
+
+...

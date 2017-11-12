@@ -1,0 +1,55 @@
+---
+# Status report
+
+- name: Update status
+  command: "scripts/status.sh"
+
+- name: Fetch summary
+  fetch: src=scripts/ansible/state.yml dest=status/{{ ansible_host }}/ flat=yes
+
+- name: Load summary
+  include_vars: "status/{{ ansible_host }}/state.yml"
+
+- name: Parse chapters
+  set_fact:
+    chapters: "{{chapters}} {{item}}"
+  when: configured[item]
+  with_items: "{{configured}}"
+
+- name: Parse services
+  set_fact:
+    services: "{{services}} {{item}}"
+  when: started[item]
+  with_items: "{{started}}"
+
+- name: Show summary
+  vars:
+    status_msg: |
+      #######################################################################
+      #                                                                     #
+      #                - Hitchwiki installation report -                    #
+      #                                                                     #
+      #######################################################################
+      
+         - Passed chapters {{chapters}}
+      
+         - Started services: {{services}}
+      
+         - Point your browser to {{ lookup('pipe', 'hostname') }} or {{ ansible_host }}
+      
+      #######################################################################
+      #                                                                     #
+      # - Read more at http://github.com/Hitchwiki/hitchwiki                #
+      #                                                                     #
+      # - Suspend the virtual machine by calling 'vagrant suspend'.         #
+      # - When you're ready to begin working again, just run 'vagrant up'.  #
+      # - To re-install, run 'vagrant destroy && vagrant up'.               #
+      #                                                                     #
+      #                 Have fun and happy hacking!                         #
+      #                                                                     #
+      #######################################################################
+  debug: 
+    msg: "{{ status_msg.split('\n') }}"
+  when: no_outro is not defined
+
+...

@@ -1,0 +1,24 @@
+---
+# Monit
+#  https://docs.ansible.com/ansible/latest/monit_module.html
+#  https://mmonit.com/monit/documentation/monit.html
+
+- name: Configure Monit
+  become: yes
+  template: src=configs/monitrc dest=/etc/monit/monitrc mode=0700
+
+- name: Check syntax
+  become: yes
+  command: monit -t
+  register: monit_syntax
+
+- name: Reload monit
+  become: yes
+  command: monit reload
+
+# fails in 2.4 https://github.com/ansible/ansible/issues/30614
+#- name: Monitor sshd in monit
+#  become: yes
+#  monit: name=openssh-server state=monitored
+
+...

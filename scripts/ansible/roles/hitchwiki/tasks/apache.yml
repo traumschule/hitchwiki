@@ -1,0 +1,69 @@
+---
+# Bring up apache2 webserver with PHP7 and extensions
+
+# Examples:
+#   https://github.com/ansible/ansible-examples/tree/master/lamp_simple
+#   https://github.com/ansible/ansible-examples/blob/master/wordpress-nginx/roles/php-fpm/tasks/main.yml
+#   https://github.com/geerlingguy/ansible-role-apache
+
+- name: Install Apache2 with PHP7 and extensions
+  become: yes
+  apt: name={{ item }} state=present
+  with_items: { apache2, php-pear, php-gettext, php-xml, php-json, php7.0, php7.0-cli, libapache2-mod-php7.0, php7.0-mysql, php7.0-curl, php7.0-gd, php7.0-intl, php7.0-imap, php7.0-mcrypt, php7.0-pspell, php7.0-recode, php7.0-sqlite3, php7.0-tidy, php7.0-xmlrpc, php7.0-xsl, php7.0-mbstring, php7.0-opcache, php-imagick, php-memcache }
+  # add when needed: php-apcu (note php7.0-opcache above)
+
+- name: Allow apache override to all
+  become: yes
+  replace:
+    path: /etc/apache2/apache2.conf
+    regexp: 'AllowOverride None'
+    replace: 'AllowOverride All'
+
+- name: Configure Hitchwiki for Apache2
+  become: yes
+  template: src=configs/apache-hitchwiki.conf dest=/etc/apache2/sites-available/hitchwiki.conf
+
+- name: Activate Hitchwiki in Apache2
+  become: yes
+  file: state=link src=/etc/apache2/sites-available/hitchwiki.conf path=/etc/apache2/sites-enabled/hitchwiki.conf force=yes
+
+- name: Remove default Apache2 site
+  become: yes
+  file: state=absent path=/etc/apache2/sites-enabled/000-default.conf
+
+- name: Clean out folder created by Apache installer
+  become: yes
+  file: state=absent path={{ dir.root }}/../html
+
+- name: Increase upload limit in php.ini
+  become: yes
+  blockinfile:
+    path: /etc/php/7.0/cli/php.ini
+    state: present
+    block: |
+      php_value post_max_size 10M
+      php_value upload_max_filesize 8M
+
+- name: Validate apache config syntax
+  become: yes
+  shell: /usr/sbin/apache2ctl -f /etc/apache2/apache2.conf -t
+  register: validate_apache_syntax
+  ignore_errors: yes
+- debug:
+    var: validate_apache_syntax.stderr_lines
+  when: validate_apache_syntax|failed
+
+- name: Enable apache mod rewrite
+  become: yes
+  apache2_module: name=rewrite state=present
+
+# Composer - https://launchpad.net/ubuntu/+source/composer
+- name: Install composer (apt)
+  become: yes
+  apt: name=composer state=present
+  register: composer_apt
+  ignore_errors: yes # Composer was introduced in ubuntu xenial, but travis only supports trusty (travis-ci/travis-ci#5821)
+- include_tasks: composer.yml
+  when: composer_apt|failed
+
+...

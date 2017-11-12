@@ -1,0 +1,27 @@
+---
+# Parsoid is a NodeJS service used by VisualEditor (https://www.mediawiki.org/wiki/Parsoid/Setup)
+- name: Add Parsoid apt key
+  become: yes
+  apt_key: id=90E9F83F22250DD7 keyserver={{keyserver}}
+
+- name: Add Wikimedia repository
+  become: yes
+  apt_repository: state=present repo='deb https://releases.wikimedia.org/debian jessie-mediawiki main'
+
+- name: Install Parsoid
+  become: yes
+  apt: name=parsoid state=present update_cache=yes
+
+- name: Create /etc/mediawiki/parsoid/
+  become: yes
+  file: state=directory path=/etc/mediawiki/parsoid/ owner={{ apache.user }}
+
+- name: Configure Parsoid
+  become: yes
+  template: src=scripts/configs/parsoid_config.yaml dest=/etc/mediawiki/parsoid/config.yaml owner={{ apache.user }} force=no
+
+- name: Create Parsoid init script
+  become: yes
+  shell: cp {{ dir.script }}/configs/parsoid_initscript /etc/default/parsoid
+
+...

@@ -1,0 +1,25 @@
+---
+
+- name: Install PHPMyAdmin
+  become: yes
+  apt: name=phpmyadmin state=present
+
+- name: Configure PHPMyAdmin
+  become: true
+  command: |
+    debconf-set-selections <<< "phpmyadmin phpmyadmin/reconfigure-webserver multiselect apache2"
+    debconf-set-selections <<< "phpmyadmin phpmyadmin/dbconfig-install boolean true"
+    debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/admin-user string {{ mediawiki.db.username }}"
+    debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/admin-pass password {{ mediawiki.db.password }}"
+    debconf-set-selections <<< "phpmyadmin phpmyadmin/mysql/app-pass password {{ phpmyadmin_password }}"
+    debconf-set-selections <<< "phpmyadmin phpmyadmin/app-password-confirm password {{ phpmyadmin_password }}"
+
+- name: Add PHPMyAdmin configuration to Apache
+  become: true
+  lineinfile:
+    path: /etc/phpmyadmin/apache.conf
+    regexp: '(Alias /).*(/usr/share/phpmyadmin)'
+    line: '\1 {{ dir.phpmyadmin }} \2'
+  notify: restart apache
+
+...

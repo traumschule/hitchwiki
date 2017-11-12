@@ -1,0 +1,116 @@
+# Git repository for deploy_remote.sh
+repository:
+  url: https://github.com/Hitchwiki/hitchwiki
+  branch: master
+
+# Domain settings
+domain: hitchwiki.test # mediawiki
+domain2: talk.hitchwiki.test #  discourse
+cookiedomain: .hitchwiki.test
+
+# Environment
+env: dev # dev | production # enables HTTPS
+user: hitchwiki # used in deploy_remote.yml playbook
+admin_contact: "{{ mediawiki.emergency_contact }}" # set your email here
+
+# Development variables
+phpmyadmin_password: autobahn
+#apt_proxy: IP address # Install apt-cacher-ng on the host to avoid downloading packages again.
+
+smtp: # MailDev runs at port 1025 at dev server https://github.com/djfarrelly/MailDev
+  enabled: true # See http://hitchwiki.test:1080/
+  host: localhost
+  port: 1025
+  auth: false # Should we use SMTP authentication (true or false)
+  username:
+  password:
+
+discourse: # for production environment only, consider to enable a swap file below
+  enabled: false
+  dir: "{{ dir.root }}/discourse"
+  domain: "{{ domain2 }}"
+  port: 3010
+
+mediawiki:
+  debug: False
+  cache: False
+  branch: REL1_29
+  protocol: http
+  sitename: Hitchwiki
+  metanamespace: Hitchwiki
+  secretkey: 
+  upgradekey:
+  visible_to_search_engines: True
+  use_smtp: True
+  enable_api: True
+  enable_write_api: True
+  api_modules_createaccount: "ApiDisabled"
+  enableuseremail: false
+  emergency_contact: "contact@hitchwiki.test"
+  password_sender: "noreply@hitchwiki.test"
+  clean_on_setup: true
+  db:
+    host: localhost
+    username: root
+    password: root
+    database: hitchwiki_en
+    prefix: hw_
+    clean_on_setup: true
+  user:
+    Hitchwiki: "{{ phpmyadmin_password }}"
+    Hitchbot: "{{ phpmyadmin_password }}"
+    Hitchhiker: "{{ phpmyadmin_password }}"
+  spam: # https://www.google.com/recaptcha/intro/index.html
+    spamprotection: False
+    # These keys will work only at domains hitchwiki.test and 192.168.33.10
+    # TODO use vault https://docs.ansible.com/ansible/latest/playbooks_vault.html
+    recaptchapublickey: 6Lfx_-cSAAAAAFNMDH9fuFc37x_TYkOAcYHY_ZNc
+    recaptchaprivatekey: 6Lfx_-cSAAAAAAdawoKHU7z83VS3aEJETODcCLQf
+  mapbox:
+    username: trustroots
+    # Public access token
+    access_token: pk.eyJ1IjoidHJ1c3Ryb290cyIsImEiOiJVWFFGa19BIn0.4e59q4-7e8yvgvcd1jzF4g
+    mapkey_streets: ce8bb774
+    mapkey_satellite: kil7hee6
+  geonames:
+    username: hitchwiki
+    usernames: { hitchwiki, hitchwiki2, hitchwiki3 }
+
+# Variables for ansible provisioning
+#  https://docs.ansible.com/ansible/latest/playbooks_variables.html
+vagrant:
+  hostname: hitchwiki.test
+  private_network_ip: "192.168.33.10" # Sets IP address for the Virtual Machine
+  hostmanager_enabled: True  # Set `false` to use only private network IP to access the server.
+                             # Vagrant won't therefore modify your `/etc/hosts` file neither.
+
+dir:
+  root: /var/www/public
+  conf: /var/www/configs
+  script: /var/www/scripts
+  pages: /var/www/scripts/pages
+  settings: /var/www/configs/settings.yml
+  wikifolder: wiki
+  wiki: /var/www/public/wiki
+  mwconf: /var/www/public/wiki/LocalSettings.php
+  dumps: /var/www/dumps
+  phpmyadmin: /usr/share/phpmyadmin
+  spyc: /var/www/public/mustangostang/spyc/Spyc.php
+  log: /var/www/log
+  dump: /var/www/dumps
+  state: /etc/ansible/facts.d/state.yml
+  discourse: /var/www/scripts/vendor/discourse
+
+apache:
+  user: www-data
+  group: www-data
+
+self_signed_certs:
+  - key: /etc/ssl/private/server.key
+    cert: /etc/ssl/certs/server.crt
+
+db_credentials: "-u {{ mediawiki.db.username }} -p{{ mediawiki.db.password }}"
+
+swap: # to let changes take effect delete `/usr/local/bin/node` and rerun `setup_hitchwiki.sh`
+  enabled: false # set true if you run out of memory
+  size: 8GB # see `man fallocate` for the correct format

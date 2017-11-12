@@ -1,0 +1,125 @@
+---
+# Setup hitchwiki
+# based on install_funcs.sh by pmgouveia.
+
+- stat: path=/etc/ansible/facts.d
+  register: facts_dir # check with facts_dir.stat.exists
+  notify: status
+- meta: flush_handlers
+
+- name: Fetch remote settings
+  fetch: src=/var/www/configs/settings.yml dest=status/{{ ansible_host }}/ flat=yes fail_on_missing=no validate_checksum=yes
+  register: fetch_settings
+
+- name: Copy settings.yml # make sure MW finds it
+  when: fetch_settings|failed
+  copy: src={{item}} dest=/var/www/configs/settings.yml owner={{user}} group={{apache.group}}
+  with_first_found:
+    - "status/{{ ansible_host }}/settings.yml"
+    - configs/settings.yml
+    - /var/www/configs/settings.yml
+    - configs/settings-example.yml
+    - /var/www/configs/settings-example.yml
+
+- name: Load settings
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "status/{{ ansible_host }}/settings.yml"
+    - configs/settings.yml
+    - /var/www/configs/settings.yml
+    - configs/settings-example.yml
+    - /var/www/configs/settings-example.yml
+
+- set_fact: keyserver=hkp://keyserver.ubuntu.com:80
+  when: keyserver is not defined
+
+- name: Check if relevant variables are defined
+  debug: var={{item}}
+  register: var
+  failed_when: var is undefined
+  with_items: { dir, domain, env, admin_contact, mediawiki.protocol, apache.user }
+
+- meta: flush_handlers
+
+# import versus include https://serverfault.com/questions/875247/whats-the-difference-between-include-tasks-and-import-tasks
+# - use import when you deal with logical "units" , for example to separate long list of tasks into subtask files
+# - use include to deal with different workflows and take decisions based on some dynamically gathered facts
+# At compile time 'configured' is undefined, so we need to use include_tasks with the downside that handlers can't be called
+# Tradeoffs and Pitfalls Between Includes and Imports https://docs.ansible.com/ansible/devel/playbooks_reuse.html
+#  "You cannot use notify to trigger a handler name which comes from inside a dynamic include (see note below)."
+
+- name: Prepare system
+  include_tasks: system.yml
+  when: not configured.system
+  notify: "update system"
+
+- name: Setup database server
+  include_tasks: database.yml
+  when: not configured.db or not started.mysql
+  notify: "restart db"
+
+- name: Setup webserver
+  include_tasks: apache.yml
+  when: not configured.web or not started.apache
+  notify: restart apache
+
+- name: Setup Mediawiki
+  include_tasks: mediawiki.yml
+  when: not configured.mw or not started.parsoid
+  notify:
+    - restart apache
+    - start parsoid
+
+- name: Setup Monit
+  include_tasks: monit.yml
+  when: not configured.monit
+  notify: restart monit
+
+- meta: flush_handlers
+
+- name: Restart monit
+  become: yes
+  service: name=monit enabled=yes state=restarted
+
+- name: Setup dev environment
+  include_tasks: dev.yml
+  when: env == 'dev' and not configured.dev
+  notify:
+    - restart apache
+    - start maildev
+
+- name: Setup production environment
+  include_tasks: production.yml
+  when: env == 'production' and not configured.production
+  notify: restart db
+
+- debug: msg="{{ env }} / {{ mediawiki.protocol }}"
+- name: Enable TLS
+  include_tasks: tls.yml
+  when: mediawiki.protocol == 'https' or env == 'production'
+  notify: restart apache
+
+- meta: flush_handlers
+
+- name: Restart apache
+  become: yes
+  service: name=apache2 enabled=yes state=restarted
+
+- name: restart parsoid
+  become: yes
+  service: name=parsoid enabled=yes state=restarted
+  notify: status
+
+- meta: flush_handlers
+
+- name: Update mediawiki
+  include_role: name=update
+
+- name: Print status
+  include_tasks: roles/status/tasks/main.yml
+
+- name: Make sure necessary services are up
+  meta: end_play
+  when: not started.mysql or not started.apache or not started.parsoid or not started.monit
+
+...

@@ -2,11 +2,19 @@
 composer.phar
 composer.lock
 public/composer
+public/autoload.php
 public/bin
 node_modules/
 
 # Vagrant files
 .vagrant
+
+# Ansible
+hosts
+host_vars
+*.retry
+state.yml
+/scripts/ansiblestatus/
 
 # Folder created by Apache installer
 /html
@@ -21,18 +29,21 @@ logs
 *.log
 
 # Local configs
-/configs/settings.ini
-/configs/vagrant.yaml
+/configs/settings.yml
+/configs/authorized_keys
 
 # Other
+/scripts/vendor
+/public/discourse
 /public/google*.html
-/scripts/vendor/bash_ini_parser
 /dumps/
 *~
 
 # Admin tools
 /public/phpmyadmin
+/public/mustangostang
 /public/sqlbuddy
 
 # OS
 .DS_STORE
+*.swp

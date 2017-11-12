@@ -1,0 +1,46 @@
+---
+# Setup database server
+
+- name: Add apt key for MariaDB
+  become: yes
+  apt_key: state=present id=0xF1656F24C74CD1D8 keyserver={{keyserver}}
+
+- name: Add repository for MariaDB (Ubuntu)
+  when: ansible_distribution == 'Ubuntu'
+  become: yes
+  apt_repository: # xenial zesty artful
+    repo: "deb [arch=amd64,i386,ppc64el] http://ams2.mirrors.digitalocean.com/mariadb/repo/10.2/ubuntu {{ ansible_distribution_release }} main"
+    state: present
+
+- name: Add repository for MariaDB (Debian)
+  when: ansible_distribution == 'Debian'
+  become: yes
+  apt_repository: # sid stretch
+    repo: "deb [arch=amd64,i386,ppc64el] http://ams2.mirrors.digitalocean.com/mariadb/repo/10.2/debian {{ ansible_distribution_release }} main"
+    state: present
+
+- name: Configure MariaDB not to prompt for passwords
+  become: yes
+  command: |
+    debconf-set-selections <<< "mariadb-server-10.2 mysql-server/root_password password {{ mediawiki.db.password }}"
+    debconf-set-selections <<< "mariadb-server-10.2 mysql-server/root_password_again password {{ mediawiki.db.password }}"
+
+- name: Install MariaDB
+  become: yes
+  apt: update_cache=yes package={{ item }} state=present allow_unauthenticated=yes
+  with_items: { mariadb-server, software-properties-common, python-mysqldb }
+  notify: "start db"
+
+- meta: flush_handlers
+
+# Mariadb should run at this point
+- name: Secure MariaDB root user
+  shell: |
+    mysqladmin -u{{ mediawiki.db.username }} password {{ mediawiki.db.password }} || mysqladmin  {{ db_credentials }} password {{ mediawiki.db.password }}
+    #mysql {{ db_credentials }} -e "UPDATE mysql.user SET Password={{ mediawiki.db.password }} WHERE User='{{ mediawiki.db.username }}'"
+    #mysql {{ db_credentials }} -e "DELETE FROM mysql.user WHERE User='{{ mediawiki.db.username }}' AND Host NOT IN ('localhost', '127.0.0.1', '::1')"
+    mysql {{ db_credentials }} -e "DELETE FROM mysql.user WHERE User=''"
+    mysql {{ db_credentials }} -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%'"
+    mysql {{ db_credentials }} -e "FLUSH PRIVILEGES"
+
+...

@@ -1,0 +1,96 @@
+---
+# Setup TLS
+
+- set_fact: enable_https=true
+
+# Let's Encrypt - certbot
+- include_tasks: letsencrypt.yml
+  register: certbot
+  when: env == 'production' and enable_https and domain is defined and not configured.tls
+
+# TODO check for release of: Let's Encrypt - apache mod md
+# "unless it's at least beta-level, we should use just letsencrypt's certbot+cron"
+#- include_tasks: tls_md.yml
+#  when: mediawiki.protocol == 'https' and env == 'production'
+
+- include_tasks: tls_selfsigned.yml
+  when: enable_https and certificates_exist|failed and not configured.tls
+
+- name: Do we have certificates?
+  shell: "[ -f {{ cert }} ] && [ -f {{ key }} ]"
+  register: tls
+  ignore_errors: yes
+
+- name: Set Apache SSL params
+  become: yes
+  template: src={{ dir.conf }}/ssl-params.conf dest=/etc/apache2/conf-available/ssl-params.conf
+  when: tls|succeeded
+
+- name: Generate a Diffie-Hellman group
+  become: yes
+  command: openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048
+  register: dhg
+  when: tls|succeeded
+
+- name: Enable ssl and headers modules for Apache
+  become: yes
+  apache2_module: name={{item}} state=present
+  with_items: { ssl, headers }
+  when: tls|succeeded
+
+- name: Enable SSL Virtual Host
+  become: yes
+  command: a2ensite default-ssl
+  when: tls|succeeded
+
+- name: Create Apache SSL configuration
+  become: yes
+  template: src={{ dir.conf }}/default-ssl.conf dest=/etc/apache2/sites-available/default-ssl.conf
+  when: tls|succeeded
+
+- name: Enable ssl-params.conf file
+  become: yes
+  command: a2enconf ssl-params
+  when: tls|succeeded
+
+- name: Redirect non-HTTPS requests
+  become: yes
+  blockinfile:
+    path: /etc/apache2/sites-enabled/hitchwiki.conf 
+    insertafter: '^  DocumentRoot'
+    block: |
+        RewriteEngine on
+        RewriteCond %{HTTP:X-Forwarded-Proto} !https
+        RewriteRule (.*) https://{{ domain }} [R=301,L]
+    state: present
+  when: tls|succeeded
+  # Redirect "/" "https://{{ domain }}/
+  # redirect loop https://stackoverflow.com/questions/18328601/redirect-loop-while-redirecting-all-http-requests-to-https-using-htaccess
+  # if syntax https://httpd.apache.org/docs/2.4/mod/core.html#if
+  # variables https://httpd.apache.org/docs/2.4/expr.html
+  # https://httpd.apache.org/docs/2.4/rewrite/remapping.html
+  # https://httpd.apache.org/docs/current/rewrite/advanced.html#redirectanchors
+  # More options
+  #RewriteEngine on
+  #RewriteCond %{HTTPS} off
+  #RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI}
+  #ReWriteCond %{SERVER_PORT} 80
+  #RewriteCond %{HTTPS} off
+  #RewriteCond %{HTTPS} !on
+  #RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  #RewriteCond %{HTTP:X-Forwarded-SSL} =off
+  
+- name: Apache syntax check
+  become: yes
+  command: apache2ctl configtest
+  register: syntaxcheck
+  when: tls|succeeded
+
+- name: Finished TLS setup
+  when: syntaxcheck|succeeded
+  become: yes
+  shell: "{{ dir.script }}/status.sh"
+  notify:
+   - apache
+
+...

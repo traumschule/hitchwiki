@@ -1,0 +1,60 @@
+---
+# Common tasks
+
+- name: Set language
+  lineinfile: 
+    path: ~/.profile
+    line: |
+      export LC_ALL="en_US.UTF-8"
+      export LANGUAGE="en_US.UTF-8"
+
+- name: Set domain
+  include_tasks: domain.yml
+
+- name: Use apt-cacher
+  become: yes
+  lineinfile:
+    path: /etc/apt/apt.conf.d/apt-cacher-ng
+    create: yes
+    regexp: '^Acquire::http::Proxy'
+    line: |
+      Acquire::http::Proxy "http://{{ apt_proxy }}:3142/";
+      Acquire::https::Proxy "false"; # or enable "PassThroughPattern: .*" in /etc/apt-cacher-ng/acng.conf
+      # See https://blog.packagecloud.io/eng/2015/05/05/using-apt-cacher-ng-with-ssl-tls/
+  when: apt_proxy is defined
+
+- name: Install apt tools
+  become: yes
+  apt: state=present name={{item}}
+  with_items: { apt-transport-https, software-properties-common, unattended-upgrades }
+
+- name: Install helper tools
+  become: yes
+  apt: name={{ item }} state=present update_cache=yes
+  with_items: { tmux, python-pip, vim, monit, curl, git, unzip, zip, imagemagick, build-essential, fail2ban, htop, backupninja, ack-grep, nano, emacs-nox, nullmailer, w3m, zsh }
+  # TODO check if ack-grep migrated to artful https://launchpad.net/ubuntu/+source/ack-grep
+
+- name: Configure backupninja
+  become: yes
+  template: src=configs/dumps.mysql dest=/etc/backup.d/ owner=root mode=0600
+  tags:
+   - backup
+   - db
+
+- name: Install node
+  include_tasks: node.yml
+  # Parsoid, bower and maildev depend on NodeSource (https://nodejs.org/en/download/package-manager)
+
+- name: Install shyaml to parse yml files
+  pip: name=shyaml state=present extra_args=--user
+
+- name: Create and activate swapfile
+  become: yes
+  command: chdir=/root |
+    fallocate --length {{ swap.size }} swapfile
+    mkswap swapfile
+    chmod 0600 swapfile
+    swapon swapfile
+  when: swap is defined and swap.enabled and swap.size
+
+...

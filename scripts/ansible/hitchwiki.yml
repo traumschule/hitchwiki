@@ -1,0 +1,18 @@
+---
+# Ansible playbook to setup hitchwiki inside vagrant
+#   https://docs.ansible.com/ansible/latest/playbooks_intro.html
+# Vagrant starts ansible after bringing up the machine (ubuntu/xenial)
+#   https://docs.ansible.com/ansible/latest/guide_vagrant.html
+#   https://www.vagrantup.com/docs/provisioning/ansible.html
+# Nice read: https://gitlab.com/osas/ansible-role-postgresql/blob/master/tasks/main.yml#L3
+
+- name: Setup hitchwiki
+  hosts: all
+  vars_files:
+    - configs/settings.yml
+  remote_user: "{{ user }}"
+  roles:
+    - deploy
+    - hitchwiki
+
+...

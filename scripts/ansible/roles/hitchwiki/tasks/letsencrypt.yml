@@ -1,0 +1,73 @@
+---
+# Certbot
+
+# https://certbot.eff.org/docs/using.html#certbot-commands
+
+- name: Add Certbot PPA
+  become: yes
+  apt_repository: state=present repo=ppa:certbot/certbot
+
+- name: Install Certbot
+  become: yes
+  apt: name=python-certbot-apache state=present update_cache=yes
+
+- name: Configure Certbot
+  become: yes
+  template: src={{ dir.conf }}/letsencrypt.ini dest=/etc/letsencrypt/cli.ini
+
+# https://certbot.eff.org/docs/using.html#where-are-my-certificates
+
+- name: Does letsencrypt possibly know our domain?
+  command: certbot certificates
+  become: yes
+  register: certificates
+- name: Show certificates
+  debug:
+    var: certificates.stdout_lines
+  # TODO bonus point: parse key & cert file from output
+
+- name: Request certificate
+  when: not domain in certificates.stdout or "No certs found" in certificates.stdout
+  become: yes
+  shell: certbot run -n -i apache -d {{ domain }} --agree-tos
+  register: certbot
+  # run non-interactively, install via apache for {{ domain }}
+  # authentification, webroot and keysize are configure via cli.ini above
+  # don't request again when certificates exist at /etc/letsencrypt/live/$domain
+
+- debug:
+    var: certbot.stdout_lines
+  when: not domain in certificates.stdout or "No certs found" in certificates.stdout
+
+- name: Do we have certificates?
+  shell: "[ -f /etc/letsencrypt/live/{{ domain }}/fullchain.pem ] && [ -f /etc/letsencrypt/live/{{ domain }}/privkey.pem ]"
+  register: certificates_exist
+  ignore_errors: yes
+
+- name: Certbot run successfull, check /var/log/letsencrypt.log for details
+  set_fact:
+     cert: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+     key: "/etc/letsencrypt/live/{{ domain }}/privkey.pem"
+  register: letsencrypt
+  when: certificates_exist|succeeded
+
+- name: Add cron job for renewal
+  cron: name=certbot special_time=monthly job="certbot renew --pre-hook \"service apache2 stop\" --post-hook \"service apache2 start\""
+  # alternative: renew --quiet --no-self-upgrade
+  # https://github.com/geerlingguy/ansible-role-certbot/blob/master/tasks/renew-cron.yml
+  when: certificates_exist|succeeded
+  notify: "apache"
+
+# https://docs.ansible.com/ansible/latest/letsencrypt_module.html
+#- letsencrypt:
+#    account_email:  {{ admin_contact }}
+#    account_key: /etc/letsencrypt/live/beta.hitchwiki.org/privkey.pem
+#    csr: /etc/letsencrypt/live/beta.hitchwiki.org/cert.pem
+#    dest: /etc/httpd/ssl/sample.com.crt # we don't need this
+#    remaining_days: 30 # better handled by cron
+
+# certificate removal
+#   https://www.jeffgeerling.com/blog/2016/remove-single-certbot-letsencrypt-certificate-server
+#   certbot delete --cert-name example.com
+
+...

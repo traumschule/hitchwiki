@@ -5,24 +5,30 @@
 #
 
 set -e
+cd "$(dirname $0)/.."
 
-source "scripts/_path_resolve.sh"
+if [ ! -f Vagrantfile ]; then # an arbirtrary file that appears only once in the whole repository tree
+    echo "ERROR: Bad working directory ($(pwd))."
+    echo "Scripts have to be run from the root directory of the hitchwiki repository."
+    echo "Aborting."
+    exit 1
+fi
 
 echo ""
 echo "Cleaning up files and folders created by Hitchwiki install..."
 
+# Remove Ansible files
+rm -f ./*.retry
+
 # Remove Mediawiki folder
-rm -fr "$WIKIDIR"
+rm -fr ./public/wiki
 
 # Other folders or files created by installation
-rm -f "$ROOTDIR/composer.lock"
-rm -fr "$ROOTDIR/public/composer"
+rm -f ./composer.lock
+rm -fr ./public/composer
 
 # Remove log files
-rm -f "$ROOTDIR/*-cloudimg-console.log"
-rm -f "$ROOTDIR/scripts/*-cloudimg-console.log"
+rm -f ./*-cloudimg-console.log
+rm -f ./scripts/*-cloudimg-console.log
 
-echo "Done! Note that this did not remove config files:"
-echo "- ./configs/settings.ini"
-echo "- ./configs/vagrant.yaml"
-echo ""
+echo "Cleaning done!"
