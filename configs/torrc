@@ -1,0 +1,10 @@
+SocksPort auto
+
+HiddenServiceDir {{dir.root}}/tor/hsv3
+HiddenServiceVersion 3
+HiddenServicePort 80 127.0.0.1:6667
+
+#SafeLogging 0
+#Log notice stdout
+Log notice file {{dir.log}}/tor-hs.log
+#Log info file {{dir.log}}/tor-hsinfo.log

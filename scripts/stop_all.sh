@@ -1,5 +1,5 @@
 #!/bin/bash
-services="monit apache2 mysqld parsoid"
+services="monit apache2 mysqld parsoid tor"
 if [ $(whoami) != 'root' ]; then echo "I need more rights! (give me names and I make it stop, else: $services)"; exit 1; fi
 if [ $1 ]; then services="$@" ; fi
 set -e

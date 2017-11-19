@@ -32,4 +32,9 @@
   include_tasks: discourse.yml
   when: discourse is defined and discourse.enabled and not configured.discourse
 
+- name: Add Tor hidden service
+  include_tasks: torhs.yml
+  when: not configured.tor
+  tags: tor
+
 ...

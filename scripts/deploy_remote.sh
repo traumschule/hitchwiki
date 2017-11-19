@@ -3,7 +3,7 @@
 starttime=$(date +%s)
 set -e
 function sep() {
-  echo -e "\n------------------------------------------------------------\n"
+  echo -e "\n------------------------------------------------------------\n\n$@"
 }
 
 sep
@@ -14,7 +14,6 @@ echo "   |  |   |     |    \    |  |  \ / \ /    |   | \    |  "
 echo "   o  o o-O-o   o     o-o o  o   o   o   o-O-o o  o o-O-o"
 echo ""
 echo "     The Hitchhiker's Guide to Hitchhiking the World"
-sep
 
 # set defaults
 HOST=$1
@@ -27,6 +26,7 @@ WEBROOT=$(grep 'webroot:' $CONFIG|cut -f4 -d' ')
 DEPS="git python-pip openssh-client sudo at tmux"
 PULL_ARGS="-U $REPO -C $VERSION -d $WEBROOT -i /etc/ansible/hosts scripts/ansible/hitchwiki.yml"
 LETSENCRYPT_ARCHIVE="$(dirname $0)/../dumps/letsencrypt.tar.xz"
+TORHS_ARCHIVE="$(dirname $0)/../dumps/torhs.tar.xz"
 
 # accept user settings
 [ -n "$DEPLOY_REPO" ] && REPO=$DEPLOY_REPO
@@ -34,6 +34,7 @@ LETSENCRYPT_ARCHIVE="$(dirname $0)/../dumps/letsencrypt.tar.xz"
 [ -n "$DEPLOY_WEBROOT" ] && WEBROOT=$DEPLOY_WEBROOT
 [ -n "$DEPLOY_DEPS" ] && DEPS="$DEPS $DEPLOY_DEPS"
 [ -n "$DEPLOY_LETSENCRYPT" ] && LETSENCRYPT_ARCHIVE=$DEPLOY_LETSENCRYPT
+[ -n "$DEPLOY_TORHS" ] && TORHS_ARCHIVE=$DEPLOY_TORHS
 
 # verify parameters or print usage
 if [ ! -d $(dirname $0)/ansible ]; then echo "Directory ansible not found. Something is wrong. Exiting."; exit 1; else cd $(dirname $0)/ansible; fi
@@ -44,11 +45,10 @@ To deploy multiple hosts see https://github.com/Hitchwiki/hitchwiki/blob/master/
 
 Adjust $CONFIG or set DEPLOY_CONFIG DEPLOY_REPO DEPLOY_VERSION DEPLOY_WEBROOT DEPLOY_DEPS DEPLOY_LETSENCRYPT to change defaults."; exit 1; fi
 
-echo "Settings:"
-for var in CONFIG REPO VERSION WEBROOT DEPS LETSENCRYPT_ARCHIVE; do echo "  $var=${!var}"; done
+sep "Settings:"
+for var in CONFIG REPO VERSION WEBROOT DEPS LETSENCRYPT_ARCHIVE TORHS_ARCHIVE; do echo "  $var=${!var}"; done
 
-sep
-
+sep "Preparation"
 echo "Copy public ssh key"
 if [ ! -f ~/.ssh/id_rsa.pub ]
 then echo "Running 'ssh-keygen' first."; ssh-keygen; fi
@@ -70,7 +70,19 @@ else
   echo "Letsencrypt: $LETSENCRYPT_ARCHIVE not found, skipping."
 fi
 
-echo "Starting deployment to $HOST"
+# If present this archive is transferred and extracted to /var/www/public/tor
+if [ -f $TORHS_ARCHIVE ]; then
+  if [ $(tar tf $TORHS_ARCHIVE|grep 'hsv2'|wc -l) == 0 ]; then
+    echo "$TORHS_ARCHIVE looks corrupt (missing 'hsv2')."; exit 1;
+  else
+    echo "Copy tor hidden service archive"
+    rsync $TORHS_ARCHIVE root@$HOST:
+  fi
+else
+  echo "Tor hidden service: $TORHS_ARCHIVE not found, skipping."
+fi
+
+sep "Starting deployment to $HOST"
 ssh -t root@$HOST "set -ev;
   apt-get update &&
   apt-get install -y $DEPS &&
@@ -80,9 +92,7 @@ ssh -t root@$HOST "set -ev;
   pip install ansible &&
   tmux -c 'ANSIBLE_FORCE_COLOR=1 ansible-pull $PULL_ARGS'"
 
-sep
-
 endtime=$(date +%s)
 min=$(((endtime-starttime) / 60))
 sec=$(((endtime-starttime) % 60))
-echo "Installed Hitchwiki on $HOST in $min minutes and $sec seconds."
+sep "Installed Hitchwiki on $HOST in $min minutes and $sec seconds."

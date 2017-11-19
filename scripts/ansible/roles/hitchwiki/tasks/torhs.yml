@@ -1,0 +1,61 @@
+---
+# Add tor hidden service
+# - hsv2: https://www.torproject.org/docs/tor-hidden-service.html.en
+# - hsv3: https://trac.torproject.org/projects/tor/wiki/doc/NextGenOnions#Howtosetupyourownprop224service
+# - best practice: https://riseup.net/en/security/network-security/tor/onionservices-best-practices
+# - apache: https://tor.stackexchange.com/questions/6183/how-to-configure-apache-for-tor-hidden-service
+# - torsocks: https://trac.torproject.org/projects/tor/wiki/doc/torsocks
+ 
+- name: Install buildtools
+  become: yes
+  apt: name={{item}} state=present
+  with_items: { automake, libevent-dev, libssl-dev, torsocks }
+
+- name: Clone tor
+  remote_user: tor
+  git:
+   repo: https://git.torproject.org/tor.git
+   dest: "{{dir.root}}/tor"
+   depth: 3
+
+- name: Build tor # with hsv3 support
+  remote_user: tor
+  command: chdir={{dir.root}}/tor ./autogen.sh && ./configure --prefix=/usr --disable-asciidoc && make
+
+- name: Install tor # over the packaged version
+  become: yes
+  command: chdir={{dir.root}}/tor make install
+
+- name: Configure tor # https://www.torproject.org/docs/faq.html.en#torrc
+  blockinfile:
+    path: /etc/tor/torrc
+    block: |
+      SocksPort auto
+      
+      HiddenServiceDir {{dir.root}}/tor/hsv2
+      HiddenServicePort 80 127.0.0.2:80              
+      
+      HiddenServiceDir {{dir.root}}/tor/hsv3
+      HiddenServiceVersion 3
+      HiddenServicePort 80 127.0.0.2:80                                            
+      
+      Log notice file /var/log/tor-hs.log
+
+- name: Configure apache to answer onion addresses
+  template: src=configs/apache-onion.conf dest=/etc/apache2/sites-enabled/onion.conf
+
+- name: Extract existing keys
+  become: yes
+  unarchive:
+    src: /root/torhs.tar.xz
+    dest: "{{dir.root}}/tor"
+    owner: tor
+    group: tor
+  # create: cd public/tor; tar cJf torhs.tar.xz hsv{2,3}
+  # fetch: rsync -aP beta:/var/www/public/tor/torhs.tar.xz dumps/
+
+- name: Restart tor and apache
+  service: name={{item}} state=restarted
+  with_items: { tor, apache2 }
+
+...

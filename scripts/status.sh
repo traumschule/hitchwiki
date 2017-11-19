@@ -29,11 +29,13 @@ parsoid=false
 maildev=false
 phpmyadmin=false
 monit=false
+tor=false
 [ -e /var/run/mysqld/mysqld.sock ] && mysql=true
 [ -f /var/run/apache2/apache2.pid ] && apache=true
 [ -f /var/run/parsoid.pid ] && parsoid=true
 [ -f /var/run/monit.pid ] && monit=true
 [ -f /var/run/maildev.pid ] && maildev=true
+[ -f /var/run/tor.pid ] && tor=true
 [ $(curl -s "$url" |grep -i hitchwiki|wc -l) != 0 ] && apache=true
 [ $(curl -s "$url:1080" |grep -i maildev|wc -l) != 0 ] && maildev=true
 [ $(curl -s "$url/phpmyadmin" |grep -i phpmyadmin|wc -l) != 0 ] && phpmyadmin=true
@@ -61,6 +63,7 @@ maildev=false
 phpmyadmin=false
 dev=false
 discourse=false
+tor=false
 [ -d /var/www/public/mustangostang ] && system=true
 [ -f /usr/local/bin/node ] && system=true
 [ -d /etc/mysql ] && db=true
@@ -69,12 +72,13 @@ discourse=false
 [ -f /etc/mediawiki/parsoid/config.yaml ] && parsoid=true
 [ -f /etc/apache2/sites-enabled/default-ssl.conf ] && tls=true
 [[ -n $monit_bin ]] && [[ ! $(monit status 2>&1 >/dev/null) ]] && monit=true
-[ $monit == "true" ] && [ $tls == "true" ] && production=true
+[ -d /var/www/public/tor ] && tor=true
+[ $monit == "true" ] && [ $tls == "true" ] && [ $tor == "true" ] && production=true
 [ -d /usr/share/phpmyadmin/ ] && phpmyadmin=true
 [ -f /etc/init.d/maildev ] && maildev=true
 [ $phpmyadmin == 'true' ] && [ $maildev == 'true' ] && dev=true
 [ -f /etc/init.d/discourse ] || [ -d /var/www/public/discourse/public ] &&  discourse=true
-for chapter in system db web tls mw parsoid monit production maildev phpmyadmin dev discourse
+for chapter in system db web tls mw parsoid monit production maildev phpmyadmin dev discourse tor
 do echo "  $chapter: ${!chapter}" >> $sf
 case $chapter in # skip non-mandatory chapters
   (tls|production|maildev|phpmyadmin|dev|discourse)	continue
