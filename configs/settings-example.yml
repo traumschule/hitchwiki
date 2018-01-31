@@ -35,7 +35,7 @@ discourse: # for production environment only, consider to enable a swap file bel
 mediawiki:
   debug: True
   cache: False
-  branch: REL1_29
+  branch: REL1_30
   protocol: http
   sitename: Hitchwiki
   metanamespace: Hitchwiki
