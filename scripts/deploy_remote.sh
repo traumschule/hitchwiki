@@ -75,6 +75,9 @@ ssh -t root@$HOST "set -ev;
   apt-get update &&
   apt-get install -y $DEPS &&
   [ -d /etc/ansible ] || mkdir /etc/ansible;
+  export LC_ALL="en_US.UTF-8" &&
+  export LC_CTYPE="en_US.UTF-8" &&
+  dpkg-reconfigure -u locales &&
   echo 'localhost ansible_connection=local' > /etc/ansible/hosts &&
   pip install -U pip &&
   pip install ansible &&
