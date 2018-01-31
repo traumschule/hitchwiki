@@ -30,6 +30,6 @@
 
 - name: Setup discourse
   include_tasks: discourse.yml
-  when: discourse is defined and discourse.enabled and not configured.discourse
+  when: discourse is defined and discourse.enabled == "true" and domain2 and not configured.discourse
 
 ...
